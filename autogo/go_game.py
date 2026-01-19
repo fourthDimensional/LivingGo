@@ -84,8 +84,6 @@ class GoGame:
 
         return True
 
-
-
     def is_on_board(self, move: Tuple[int, int]) -> bool:
         x, y = move
         return 0 <= x < self.board_size and 0 <= y < self.board_size
@@ -147,3 +145,175 @@ class GoGame:
                 if board[nx, ny] == 0:
                     liberties.add((nx, ny))
         return len(liberties)
+
+    def remove_captured_stones(self, state: GoGameState, last_move: Tuple[int, int]) -> Tuple[int, Optional[Tuple[int, int]]]:
+        x, y = last_move
+        opponent_color = 3 - state.board[x, y]  # switch between 1 and 2
+        captured = 0
+        ko_point = None
+
+        # check each neighboring opponent group
+        for neighbor in self.get_neighbors(last_move):
+            nx, ny = neighbor
+            if state.board[nx, ny] == opponent_color:
+                group = self.get_group(state, (nx, ny))
+                if self.get_liberties(state, group) == 0:
+                    captured += len(group)
+
+                    # check for ko: single stone capture that creates a ko situation
+                    if len(group) == 1:
+                        # check if the captured stone was only adjacent to the placed stone
+                        captured_neighbors = self.get_neighbors((nx, ny))
+                        adjacent_to_placed = {last_move}
+                        other_neighbors = [n for n in captured_neighbors if n not in adjacent_to_placed]
+
+                        # check if all other neighbors are occupied by current player's stones
+                        all_own_color = True
+                        for ox, oy in other_neighbors:
+                            if state.board[ox, oy] != state.current_player:
+                                all_own_color = False
+                                break
+
+                        # check if placing this stone created a group with only one liberty (the captured position)
+                        if all_own_color and len(other_neighbors) == 3:  # Edge or corner
+                            placed_group = self.get_group(state, last_move)
+                            if self.get_liberties(state, placed_group) == 1:
+                                ko_point = (nx, ny)
+
+                    # remove the captured stones
+                    for gx, gy in group:
+                        state.board[gx, gy] = 0
+
+        return captured, ko_point
+
+    def make_move(self, state: GoGameState, move: Tuple[int, int]) -> Optional[GoGameState]:
+        """Make a move and return new state if valid."""
+        if not self.is_valid_move(state, move):
+            return None
+
+        # create new state
+        new_state = GoGameState(
+            board=state.board.copy(),
+            current_player=3 - state.current_player,
+            last_move=move,
+            ko_point=None,
+            move_count=state.move_count + 1,
+            captured_black=state.captured_black,
+            captured_white=state.captured_white,
+            consecutive_passes=0,  # reset pass tracking for regular moves
+            last_was_pass=False,
+            board_history=state.board_history + [state.board.copy()]  # add current board to history
+        )
+
+        # place stone
+        x, y = move
+        new_state.board[x, y] = state.current_player
+
+        # remove captured stones and detect ko
+        captured, ko_point = self.remove_captured_stones(new_state, move)
+        if state.current_player == 1:  # black captured white
+            new_state.captured_white += captured
+        else:
+            new_state.captured_black += captured
+
+        # set ko point if detected
+        new_state.ko_point = ko_point
+
+        return new_state
+
+    def make_pass(self, state: GoGameState) -> GoGameState:
+        new_state = GoGameState(
+            board=state.board.copy(),
+            current_player=3 - state.current_player,
+            last_move=None,
+            ko_point=None, # ko is cleared after a pass
+            move_count=state.move_count + 1,
+            captured_black=state.captured_black,
+            captured_white=state.captured_white,
+            consecutive_passes=state.consecutive_passes + 1 if state.last_was_pass else 1,
+            last_was_pass=True,
+            board_history=state.board_history # pass does not change board history
+        )
+
+        return new_state
+
+    def get_valid_moves(self, state: GoGameState) -> List[Tuple[int, int]]:
+        # will probably be useful for analysis and for the model to know valid moves
+        valid_moves = []
+        for x in range(self.board_size):
+            for y in range(self.board_size):
+                if self.is_valid_move(state, (x, y)):
+                    valid_moves.append((x, y))
+        return valid_moves
+
+    @staticmethod
+    def is_game_over(state: GoGameState) -> bool:
+        return state.consecutive_passes >= 2
+
+    def get_winner(self, state: GoGameState) -> Optional[int]:
+        if not self.is_game_over(state):
+            return None
+
+        # get territory
+        black_territory, white_territory = self.calculate_territory(state.board)
+
+        # score: stones + territory + captures + komi
+        black_score = (np.sum(state.board == 1) +
+                      black_territory +
+                      state.captured_white)
+
+        white_score = (np.sum(state.board == 2) +
+                      white_territory +
+                      state.captured_black +
+                      6.5)  # Komi
+
+        return 1 if black_score > white_score else 2
+
+    def calculate_territory(self, board: np.ndarray) -> Tuple[int, int]:
+        visited = np.zeros_like(board.shape, dtype=bool)
+        black_territory = 0
+        white_territory = 0
+
+        for x in range(self.board_size):
+            for y in range(self.board_size):
+                if board[x, y] == 0 and not visited[x, y]:
+                    # found an empty point, start flood fill
+                    territory, borders = self.flood_fill_territory(board, (x, y), visited)
+
+                    # determine ownership
+                    borders_set = set(borders)
+                    black_border = 1 in borders_set
+                    white_border = 2 in borders_set
+
+                    if black_border and not white_border:
+                        black_territory += territory
+                    elif white_border and not black_border:
+                        white_territory += territory
+                    # if both or none, neutral territory
+
+        return black_territory, white_territory
+
+    def flood_fill_territory(self, board: np.ndarray, start: Tuple[int, int], visited: np.ndarray) -> Tuple[int, List[int]]:
+        if board[start[0], start[1]] != 0:
+            return 0, []
+
+        stack = [start]
+        territory = 0
+        borders = []
+
+        while stack:
+            x, y = stack.pop()
+            if visited[x, y]:
+                continue
+
+            visited[x, y] = True
+            territory += 1
+
+            for neighbor in self.get_neighbors((x, y)):
+                nx, ny = neighbor
+                if board[nx, ny] == 0 and not visited[nx, ny]:
+                    stack.append((nx, ny))
+                elif board[nx, ny] != 0:
+                    borders.append(board[nx, ny])
+
+        return territory, borders
