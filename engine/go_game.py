@@ -395,12 +395,13 @@ class GoGame:
             valid_moves[move[0], move[1]] = 1.0
         tensor[11] = valid_moves
 
-        # channels 12-18: board history (last 7 positions)
+        # channels 12-18: board history (last 7 positions, using 2 planes per position)
         history_len = min(7, len(state.board_history))
         for i in range(history_len):
             past_board = state.board_history[-(i + 1)]
-            tensor[12 + i, 0] = (past_board == 1).astype(np.float32)  # black stones
-            tensor[12 + i, 1] = (past_board == 2).astype(np.float32)  # white stones
+            base_idx = 12 + 2 * i
+            tensor[base_idx] = (past_board == 1).astype(np.float32)  # black stones
+            tensor[base_idx + 1] = (past_board == 2).astype(np.float32)  # white stones
 
         return tensor
 
