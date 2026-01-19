@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from engine.go_game import GoGame
 from engine.main import GoModel
 
