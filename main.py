@@ -25,6 +25,23 @@ def select_move_from_policy(policy, game, state):
     return move
 
 
+def play_game(game, state, model):
+    state_tensor = game.to_tensor(state)
+    with torch.no_grad():
+        policy, value = model(torch.from_numpy(state_tensor).unsqueeze(0))
+
+    print(f"Value: {value.item():.4f} (win prob for {'White' if state.current_player == 2 else 'Black'})")
+
+    move = select_move_from_policy(policy, game, state)
+    if move:
+        state = game.make_move(state, move)
+        print(f"Move played: {move}")
+    else:
+        state = game.make_pass(state)
+        print("Move: PASS")
+
+    return state
+
 def main():
     # initialize game
     game = GoGame(board_size=9)
@@ -39,39 +56,9 @@ def main():
 
     print("\nModel initialized")
 
-    # move 1: black
-    print("MOVE 1 - BLACK")
-
-    state_tensor = game.to_tensor(state)
-    with torch.no_grad():
-        policy, value = model(torch.from_numpy(state_tensor).unsqueeze(0))
-
-    print(f"Value: {value.item():.4f} (win prob for black)")
-
-    move = select_move_from_policy(policy, game, state)
-    if move:
-        state = game.make_move(state, move)
-        print(f"Move played: {move}")
-    else:
-        state = game.make_pass(state)
-        print("Move: PASS")
-
-    # move 2: white
-    print("MOVE 2 - WHITE")
-
-    state_tensor = game.to_tensor(state)
-    with torch.no_grad():
-        policy, value = model(torch.from_numpy(state_tensor).unsqueeze(0))
-
-    print(f"Value: {value.item():.4f} (win prob for white)")
-
-    move = select_move_from_policy(policy, game, state)
-    if move:
-        state = game.make_move(state, move)
-        print(f"Move played: {move}")
-    else:
-        state = game.make_pass(state)
-        print("Move: PASS")
+    for i in range(10):
+        print(f"\n--- Move {i + 1} ---")
+        state = play_game(game, state, model)
 
     print("Initial board state (after 2 moves):")
     print(state.board)

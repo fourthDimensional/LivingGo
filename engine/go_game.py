@@ -359,7 +359,7 @@ class GoGame:
         """Convert game state to tensor representation for model input."""
         # channels: 0-1 (stones), 2 (empty), 3 (turn), 4 (ko), 5 (last move), 6-10 (liberties), 11 (legal), 12-18 (history)
         # VERY MUCH inspired by alphago's implementation
-        channels = 19
+        channels = 26
         tensor = np.zeros((channels, self.board_size, self.board_size), dtype=np.float32)
 
         # channel 0: black stones
