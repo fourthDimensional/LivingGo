@@ -92,63 +92,47 @@ class GoRedisClient:
             logger.info("No trajectories to add")
             return 0
 
-        try:
-            # Use Redis pipeline for bulk insert
-            pipeline = self.client.pipeline()
-            trajectory_data_list = []
+        # use Redis pipeline for bulk insert
+        pipeline = self.client.pipeline()
+        trajectory_data_list = []
 
-            # Prepare trajectory data with validation
-            for i, traj in enumerate(trajectories):
-                try:
-                    # Validate trajectory structure
-                    if not isinstance(traj, dict) or "states" not in traj:
-                        logger.warning(f"Skipping invalid trajectory at index {i}: missing required fields")
-                        continue
-
-                    trajectory_data = pickle.dumps(traj)
-                    trajectory_data_list.append(trajectory_data)
-                except (pickle.PickleError, TypeError) as e:
-                    logger.warning(f"Failed to serialize trajectory at index {i}: {e}")
+        # prepare trajectory data with validation
+        for i, traj in enumerate(trajectories):
+            try:
+                # validate trajectory structure
+                if not isinstance(traj, dict) or "states" not in traj:
+                    logger.warning(f"Skipping invalid trajectory at index {i}: missing required fields")
                     continue
 
-            if not trajectory_data_list:
-                logger.error("No valid trajectories to add after validation")
-                return 0
+                trajectory_data = pickle.dumps(traj)
+                trajectory_data_list.append(trajectory_data)
+            except (pickle.PickleError, TypeError) as e:
+                logger.warning(f"Failed to serialize trajectory at index {i}: {e}")
+                continue
 
-            # Add all trajectories to the pipeline
-            for trajectory_data in trajectory_data_list:
-                pipeline.lpush("trajectories", trajectory_data)
+        if not trajectory_data_list:
+            logger.error("No valid trajectories to add after validation")
+            return 0
 
-            # Execute all operations in a single roundtrip
-            results = pipeline.execute()
+        # add all trajectories to the pipeline
+        for trajectory_data in trajectory_data_list:
+            pipeline.lpush("trajectories", trajectory_data)
 
-            total_added = len([r for r in results if r])  # Count successful additions
-            total_trajectories = self.client.llen("trajectories")
+        # execute all operations in a single roundtrip
+        results = pipeline.execute()
 
-            logger.info(
-                f"Added {total_added}/{len(trajectory_data_list)} trajectories to Redis in batch operation, total trajectories: {total_trajectories}")
+        total_added = len([r for r in results if r])  # count successful additions
+        total_trajectories = self.client.llen("trajectories")
 
-            # Log any failures
-            failed_count = len(trajectory_data_list) - total_added
-            if failed_count > 0:
-                logger.warning(f"{failed_count} trajectories failed to add to Redis")
+        logger.info(
+            f"Added {total_added}/{len(trajectory_data_list)} trajectories to Redis in batch operation, total trajectories: {total_trajectories}")
 
-            return total_added
+        # log any failures
+        failed_count = len(trajectory_data_list) - total_added
+        if failed_count > 0:
+            logger.warning(f"{failed_count} trajectories failed to add to Redis")
 
-        except Exception as e:
-            logger.error(f"Batch trajectory insertion failed: {e}")
-            # Fallback to individual insertions
-            logger.info("Falling back to individual trajectory insertions")
-            fallback_count = 0
-            for traj in trajectories:
-                try:
-                    self.add_trajectory(traj)
-                    fallback_count += 1
-                except Exception as fallback_error:
-                    logger.error(f"Failed to add trajectory individually: {fallback_error}")
-
-            logger.info(f"Fallback successfully added {fallback_count}/{len(trajectories)} trajectories")
-            return fallback_count
+        return total_added
 
     def get_trajectories(self, count: int = 10) -> List[Dict[str, Any]]:
         trajectory_data_list = self.client.lrange("trajectories", 0, count - 1)
