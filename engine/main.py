@@ -10,7 +10,7 @@ class GoModel(torch.nn.Module):
 
         # The initial convolutional layers to process the board state
         self.conv_layers = torch.nn.Sequential(
-            torch.nn.Conv2d(8, 64, kernel_size=3, padding=1),
+            torch.nn.Conv2d(19, 64, kernel_size=3, padding=1), # matches 19 channels in @go_game.py
             torch.nn.ReLU(),
             torch.nn.Conv2d(64, 128, kernel_size=3, padding=1),
             torch.nn.ReLU(),
