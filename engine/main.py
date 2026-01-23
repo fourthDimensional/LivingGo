@@ -233,13 +233,18 @@ async def get_game_state():
     if state is None:
         return {"error": "No game state available"}
 
+    # Convert numpy types to native Python types
+    last_move = None
+    if state.last_move:
+        last_move = (int(state.last_move[0]), int(state.last_move[1]))
+
     return {
         "board": state.board.tolist(),
-        "current_player": state.current_player,
-        "move_count": state.move_count,
-        "last_move": state.last_move,
-        "captured_black": state.captured_black,
-        "captured_white": state.captured_white,
+        "current_player": int(state.current_player),
+        "move_count": int(state.move_count),
+        "last_move": last_move,
+        "captured_black": int(state.captured_black),
+        "captured_white": int(state.captured_white),
         "game_over": game_loop.game_over,
     }
 
@@ -254,15 +259,20 @@ async def websocket_endpoint(websocket: WebSocket):
         # send current state immediately
         state = redis_client.load_public_game_state()
         if state:
+            # Convert numpy types to native Python types
+            last_move = None
+            if state.last_move:
+                last_move = (int(state.last_move[0]), int(state.last_move[1]))
+
             await websocket.send_json(
                 {
                     "type": "game_update",
                     "board": state.board.tolist(),
-                    "current_player": state.current_player,
-                    "move_count": state.move_count,
-                    "last_move": state.last_move,
-                    "captured_black": state.captured_black,
-                    "captured_white": state.captured_white,
+                    "current_player": int(state.current_player),
+                    "move_count": int(state.move_count),
+                    "last_move": last_move,
+                    "captured_black": int(state.captured_black),
+                    "captured_white": int(state.captured_white),
                     "game_over": game_loop.game_over,
                 }
             )
@@ -290,14 +300,19 @@ async def broadcast_game_state():
     if state is None:
         return
 
+    # Convert numpy types to native Python types
+    last_move = None
+    if state.last_move:
+        last_move = (int(state.last_move[0]), int(state.last_move[1]))
+
     game_message = {
         "type": "game_update",
         "board": state.board.tolist(),
-        "current_player": state.current_player,
-        "move_count": state.move_count,
-        "last_move": state.last_move,
-        "captured_black": state.captured_black,
-        "captured_white": state.captured_white,
+        "current_player": int(state.current_player),
+        "move_count": int(state.move_count),
+        "last_move": last_move,
+        "captured_black": int(state.captured_black),
+        "captured_white": int(state.captured_white),
         "game_over": game_loop.game_over,
     }
 
