@@ -140,7 +140,7 @@ class GoRedisClient:
 
         logger.info(f"Retrieved {len(trajectories)} trajectories from Redis (requested {count})")
 
-        # Remove retrieved trajectories
+        # remove retrieved trajectories
         if trajectories:
             self.client.ltrim("trajectories", count, -1)
             remaining = self.client.llen("trajectories")
@@ -153,10 +153,120 @@ class GoRedisClient:
     def get_trajectory_count(self) -> int:
         return self.client.llen("trajectories")
 
-    # Training statistics
+    # training statistics
     def increment_training_steps(self):
         self.client.incr("training:steps")
 
     def get_training_steps(self) -> int:
         steps = self.client.get("training:steps")
         return int(steps) if steps else 0
+
+    def update_win_stats(self, winner: int):
+        key = f"public:wins:{'black' if winner == 1 else 'white'}"
+        self.client.incr(key)
+
+    def update_win_stats_batch(self, winners: List[int]):
+        """Update win statistics for multiple games."""
+        if not winners:
+            return
+
+        black_wins = sum(1 for w in winners if w == 1)
+        white_wins = sum(1 for w in winners if w == 2)
+
+        if black_wins:
+            self.client.incrby("public:wins:black", black_wins)
+        if white_wins:
+            self.client.incrby("public:wins:white", white_wins)
+
+        logger.info(f"Updated win stats: {black_wins} black, {white_wins} white")
+
+    def get_win_stats(self) -> Dict[str, int]:
+        """Get win statistics."""
+        black_wins = int(self.client.get("public:wins:black") or 0)
+        white_wins = int(self.client.get("public:wins:white") or 0)
+        return {"black": black_wins, "white": white_wins}
+
+    # cleanup and maintenance
+    def clear_trajectories(self):
+        """Clear all training trajectories."""
+        self.client.delete("trajectories")
+
+    def clear_public_state(self):
+        """Clear public game state."""
+        keys = [
+            "public:board_state",
+            "public:move_count",
+            "public:current_player",
+            "public:last_move",
+            "public:metadata"
+        ]
+        self.client.delete(*keys)
+
+    def clear_all_data(self):
+        """Clear all Go-related data from Redis."""
+        logger.info("Clearing all data from Redis...")
+
+        # clear all Go-related keys
+        patterns = [
+            "model:*",           # All saved models
+            "current_model_version",
+            "trajectories",      # Training trajectories
+            "training:*",        # Training metadata
+            "public:*",          # Public game state
+            "public:wins:*",     # Win statistics
+            "rq:queue:*",        # RQ job queues
+            "rq:job:*",          # RQ job data
+            "rq:worker:*",       # RQ worker data
+            "rq:failed:*",       # RQ failed jobs
+        ]
+
+        # collect all keys to delete
+        all_keys = []
+        for pattern in patterns:
+            keys = self.client.keys(pattern)
+            if keys:
+                all_keys.extend(keys)
+                logger.info(f"Found {len(keys)} keys matching pattern '{pattern}'")
+
+        # also try individual keys
+        individual_keys = [
+            "current_model_version",
+            "trajectories",
+            "training:steps",
+            "public:wins:black",
+            "public:wins:white",
+        ]
+
+        for key in individual_keys:
+            if self.client.exists(key):
+                all_keys.append(key)
+                logger.info(f"Found individual key '{key}'")
+
+        # remove duplicates and delete
+        if all_keys:
+            unique_keys = list(set(all_keys))
+            self.client.delete(*unique_keys)
+            logger.info(f"Deleted {len(unique_keys)} keys from Redis")
+        else:
+            logger.info("No keys found to delete")
+
+        logger.info("Redis data clearing completed")
+
+    def get_redis_info(self) -> Dict[str, Any]:
+        """Get Redis server info."""
+        return self.client.info()
+
+    # backup and restore
+    def backup_state(self) -> Dict[str, bytes]:
+        """Backup all relevant keys."""
+        keys = self.client.keys("*")
+        backup = {}
+        for key in keys:
+            backup[key] = self.client.get(key)
+        return backup
+
+    def restore_state(self, backup: Dict[str, bytes]):
+        """Restore state from backup."""
+        self.client.flushdb()
+        for key, value in backup.items():
+            self.client.set(key, value)
