@@ -31,7 +31,7 @@ class GoRedisClient:
         return self.client.get(f'model:{version}')
 
     # game state management stuff
-    def save_game_state(self, state: GoGameState):
+    def save_public_game_state(self, state: GoGameState):
         # this is the public, singular game state
         board_key = 'public:board_state'
         self.client.set(board_key, pickle.dumps(state.board))
@@ -50,7 +50,7 @@ class GoRedisClient:
         }
         self.client.set("public:metadata", pickle.dumps(metadata))
 
-    def load_game_state(self) -> Optional[GoGameState]:
+    def load_public_game_state(self) -> Optional[GoGameState]:
         board_data = self.client.get("public:board_state")
         if not board_data:
             return None
