@@ -2,23 +2,25 @@ import numpy as np
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
+
 @dataclass
 class GoGameState:
-    board: np.ndarray # 0 is empty, 1 is black, 2 is white
-    current_player: int # 1 is black, 2 is white
+    board: np.ndarray  # 0 is empty, 1 is black, 2 is white
+    current_player: int  # 1 is black, 2 is white
     last_move: Optional[Tuple[int, int]]
     ko_point: Optional[Tuple[int, int]]
     move_count: int
     captured_black: int
     captured_white: int
-    consecutive_passes: int # track consecutive passes. determine end of game
-    last_was_pass: bool # track if the last move was a pass
-    board_history: List[np.ndarray] # track board history for superko rule
-    board_hashes: set[int] # track board hashes for fast superko checking
+    consecutive_passes: int  # track consecutive passes. determine end of game
+    last_was_pass: bool  # track if the last move was a pass
+    board_history: List[np.ndarray]  # track board history for superko rule
+    board_hashes: set[int]  # track board hashes for fast superko checking
+
 
 class GoGame:
     # O(n^2) where n = board_size
-    def __init__(self, board_size: int=9):
+    def __init__(self, board_size: int = 9):
         self.board_size = board_size
         self._neighbors = {}
         for x in range(board_size):
@@ -46,7 +48,7 @@ class GoGame:
             consecutive_passes=0,
             last_was_pass=False,
             board_history=[],
-            board_hashes={board_hash}
+            board_hashes={board_hash},
         )
 
     # O(h * n^2) where h = history length (worst case), O(n^2) average with hash optimization
@@ -103,7 +105,9 @@ class GoGame:
 
     # O(h * n^2) where h = history length, each array_equal is O(n^2)
     @staticmethod
-    def would_repeat_position(board_history: List[np.ndarray], prospective_board: np.ndarray) -> bool:
+    def would_repeat_position(
+        board_history: List[np.ndarray], prospective_board: np.ndarray
+    ) -> bool:
         """Check if a move would repeat a previous board position (superko rule)."""
         for historical_board in board_history:
             if np.array_equal(historical_board, prospective_board):
@@ -156,7 +160,9 @@ class GoGame:
         return len(liberties)
 
     # O(n^2) - checks up to 4 neighbor groups, each group operation O(n^2) worst case
-    def remove_captured_stones(self, state: GoGameState, last_move: Tuple[int, int]) -> Tuple[int, Optional[Tuple[int, int]]]:
+    def remove_captured_stones(
+        self, state: GoGameState, last_move: Tuple[int, int]
+    ) -> Tuple[int, Optional[Tuple[int, int]]]:
         x, y = last_move
         opponent_color = 3 - state.board[x, y]  # switch between 1 and 2
         captured = 0
@@ -175,7 +181,9 @@ class GoGame:
                         # check if the captured stone was only adjacent to the placed stone
                         captured_neighbors = self.get_neighbors((nx, ny))
                         adjacent_to_placed = {last_move}
-                        other_neighbors = [n for n in captured_neighbors if n not in adjacent_to_placed]
+                        other_neighbors = [
+                            n for n in captured_neighbors if n not in adjacent_to_placed
+                        ]
 
                         # check if all other neighbors are occupied by current player's stones
                         all_own_color = True
@@ -185,7 +193,9 @@ class GoGame:
                                 break
 
                         # check if placing this stone created a group with only one liberty (the captured position)
-                        if all_own_color and len(other_neighbors) == 3:  # Edge or corner
+                        if (
+                            all_own_color and len(other_neighbors) == 3
+                        ):  # Edge or corner
                             placed_group = self.get_group(state, last_move)
                             if self.get_liberties(state, placed_group) == 1:
                                 ko_point = (nx, ny)
@@ -197,7 +207,9 @@ class GoGame:
         return captured, ko_point
 
     # O(h * n^2) - dominated by is_valid_move call and board copy/hashing
-    def make_move(self, state: GoGameState, move: Tuple[int, int]) -> Optional[GoGameState]:
+    def make_move(
+        self, state: GoGameState, move: Tuple[int, int]
+    ) -> Optional[GoGameState]:
         """Make a move and return new state if valid."""
         if not self.is_valid_move(state, move):
             return None
@@ -220,7 +232,7 @@ class GoGame:
             consecutive_passes=0,
             last_was_pass=False,
             board_history=state.board_history,
-            board_hashes=state.board_hashes
+            board_hashes=state.board_hashes,
         )
         captured, ko_point = self.remove_captured_stones(temp_state, move)
 
@@ -230,12 +242,14 @@ class GoGame:
             last_move=move,
             ko_point=ko_point,
             move_count=state.move_count + 1,
-            captured_black=state.captured_black + (captured if state.current_player == 2 else 0),
-            captured_white=state.captured_white + (captured if state.current_player == 1 else 0),
+            captured_black=state.captured_black
+            + (captured if state.current_player == 2 else 0),
+            captured_white=state.captured_white
+            + (captured if state.current_player == 1 else 0),
             consecutive_passes=0,
             last_was_pass=False,
             board_history=state.board_history + [state.board.copy()],
-            board_hashes=state.board_hashes | {hash(new_board.tobytes())}
+            board_hashes=state.board_hashes | {hash(new_board.tobytes())},
         )
 
         return new_state
@@ -246,14 +260,16 @@ class GoGame:
             board=state.board,
             current_player=3 - state.current_player,
             last_move=None,
-            ko_point=None, # ko is cleared after a pass
+            ko_point=None,  # ko is cleared after a pass
             move_count=state.move_count + 1,
             captured_black=state.captured_black,
             captured_white=state.captured_white,
-            consecutive_passes=state.consecutive_passes + 1 if state.last_was_pass else 1,
+            consecutive_passes=state.consecutive_passes + 1
+            if state.last_was_pass
+            else 1,
             last_was_pass=True,
-            board_history=state.board_history, # pass does not change board history
-            board_hashes=state.board_hashes
+            board_history=state.board_history,  # pass does not change board history
+            board_hashes=state.board_hashes,
         )
 
     # O(h * n^2) - is_valid_move called for each empty position with adjacent stones
@@ -290,14 +306,11 @@ class GoGame:
         black_territory, white_territory = self.calculate_territory(state.board)
 
         # score: stones + territory + captures + komi
-        black_score = (np.sum(state.board == 1) +
-                      black_territory +
-                      state.captured_white)
+        black_score = np.sum(state.board == 1) + black_territory + state.captured_white
 
-        white_score = (np.sum(state.board == 2) +
-                      white_territory +
-                      state.captured_black +
-                      6.5)  # Komi
+        white_score = (
+            np.sum(state.board == 2) + white_territory + state.captured_black + 6.5
+        )  # Komi
 
         return 1 if black_score > white_score else 2
 
@@ -311,7 +324,9 @@ class GoGame:
             for y in range(self.board_size):
                 if board[x, y] == 0 and not visited[x, y]:
                     # found an empty point, start flood fill
-                    territory, borders = self.flood_fill_territory(board, (x, y), visited)
+                    territory, borders = self.flood_fill_territory(
+                        board, (x, y), visited
+                    )
 
                     # determine ownership
                     borders_set = set(borders)
@@ -327,7 +342,9 @@ class GoGame:
         return black_territory, white_territory
 
     # O(n^2) - worst case visits entire board
-    def flood_fill_territory(self, board: np.ndarray, start: Tuple[int, int], visited: np.ndarray) -> Tuple[int, List[int]]:
+    def flood_fill_territory(
+        self, board: np.ndarray, start: Tuple[int, int], visited: np.ndarray
+    ) -> Tuple[int, List[int]]:
         if board[start[0], start[1]] != 0:
             return 0, []
 
@@ -358,7 +375,9 @@ class GoGame:
         # channels: 0-1 (stones), 2 (empty), 3 (turn), 4 (ko), 5 (last move), 6-10 (liberties), 11 (legal), 12-18 (history)
         # VERY MUCH inspired by alphago's implementation
         channels = 26
-        tensor = np.zeros((channels, self.board_size, self.board_size), dtype=np.float32)
+        tensor = np.zeros(
+            (channels, self.board_size, self.board_size), dtype=np.float32
+        )
 
         # channel 0: black stones
         tensor[0] = (state.board == 1).astype(np.float32)
@@ -370,8 +389,11 @@ class GoGame:
         tensor[2] = (state.board == 0).astype(np.float32)
 
         # channel 3: current player (1 for black, 0 for white)
-        tensor[3] = np.full((self.board_size, self.board_size),
-                            1.0 if state.current_player == 1 else 0.0, dtype=np.float32)
+        tensor[3] = np.full(
+            (self.board_size, self.board_size),
+            1.0 if state.current_player == 1 else 0.0,
+            dtype=np.float32,
+        )
 
         # channel 4: ko point
         if state.ko_point:
@@ -407,7 +429,9 @@ class GoGame:
     def get_liberty_channels(self, state: GoGameState) -> np.ndarray:
         """Create liberty channels for each position."""
         # liberties are free intersections adjacent to a group
-        liberty_channels = np.zeros((5, self.board_size, self.board_size), dtype=np.float32)
+        liberty_channels = np.zeros(
+            (5, self.board_size, self.board_size), dtype=np.float32
+        )
         liberties_grid = np.full((self.board_size, self.board_size), -1, dtype=np.int8)
 
         for x in range(self.board_size):

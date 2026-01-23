@@ -17,15 +17,18 @@ from engine.redis_client import GoRedisClient
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class GoModel(torch.nn.Module):
-    def __init__(self, board_size: int =9):
+    def __init__(self, board_size: int = 9):
         super().__init__()
         self.board_size = board_size
         self.action_size = self.board_size * self.board_size + 1  # +1 for pass move
 
         # The initial convolutional layers to process the board state
         self.conv_layers = torch.nn.Sequential(
-            torch.nn.Conv2d(26, 64, kernel_size=3, padding=1), # matches 19 channels in @go_game.py
+            torch.nn.Conv2d(
+                26, 64, kernel_size=3, padding=1
+            ),  # matches 19 channels in @go_game.py
             torch.nn.ReLU(),
             torch.nn.Conv2d(64, 128, kernel_size=3, padding=1),
             torch.nn.ReLU(),
@@ -39,7 +42,7 @@ class GoModel(torch.nn.Module):
             torch.nn.ReLU(),
             torch.nn.Flatten(),
             torch.nn.Linear(2 * self.board_size * self.board_size, self.action_size),
-            torch.nn.Softmax(dim=-1)
+            torch.nn.Softmax(dim=-1),
         )
 
         # The value head to output the game outcome prediction
@@ -50,7 +53,7 @@ class GoModel(torch.nn.Module):
             torch.nn.Linear(self.board_size * self.board_size, 256),
             torch.nn.ReLU(),
             torch.nn.Linear(256, 1),
-            torch.nn.Tanh()
+            torch.nn.Tanh(),
         )
 
     def forward(self, x):
@@ -58,6 +61,7 @@ class GoModel(torch.nn.Module):
         policy = self.policy_head(x)
         value = self.value_head(x)
         return policy, value
+
 
 class GameLoop:
     """Public game loop that runs the main Go game for display"""
@@ -99,7 +103,9 @@ class GameLoop:
             return None
 
             # model-based move
-        state_tensor = torch.from_numpy(self.game.to_tensor(state)).unsqueeze(0).to(self.device)
+        state_tensor = (
+            torch.from_numpy(self.game.to_tensor(state)).unsqueeze(0).to(self.device)
+        )
 
         with torch.no_grad():
             policy, _ = self.model(state_tensor)
@@ -136,7 +142,7 @@ class GameLoop:
         move = self.select_move(self.state)
         if move is None:
             # pass move
-            pass_count = getattr(self, 'pass_count', 0) + 1
+            pass_count = getattr(self, "pass_count", 0) + 1
             if pass_count >= 2:
                 self.game_over = True
                 winner = self.game.get_winner(self.state)
@@ -202,6 +208,7 @@ app.add_middleware(
 async def root():
     return {"message": "Go Game API", "status": "running"}
 
+
 @app.get("/status")
 async def get_status():
     """Get current game status."""
@@ -215,7 +222,7 @@ async def get_status():
         "trajectory_count": trajectory_count,
         "training_steps": training_steps,
         "win_stats": win_stats,
-        "game_active": not game_loop.game_over
+        "game_active": not game_loop.game_over,
     }
 
 
@@ -233,7 +240,7 @@ async def get_game_state():
         "last_move": state.last_move,
         "captured_black": state.captured_black,
         "captured_white": state.captured_white,
-        "game_over": game_loop.game_over
+        "game_over": game_loop.game_over,
     }
 
 
@@ -247,16 +254,18 @@ async def websocket_endpoint(websocket: WebSocket):
         # send current state immediately
         state = redis_client.load_public_game_state()
         if state:
-            await websocket.send_json({
-                "type": "game_update",
-                "board": state.board.tolist(),
-                "current_player": state.current_player,
-                "move_count": state.move_count,
-                "last_move": state.last_move,
-                "captured_black": state.captured_black,
-                "captured_white": state.captured_white,
-                "game_over": game_loop.game_over
-            })
+            await websocket.send_json(
+                {
+                    "type": "game_update",
+                    "board": state.board.tolist(),
+                    "current_player": state.current_player,
+                    "move_count": state.move_count,
+                    "last_move": state.last_move,
+                    "captured_black": state.captured_black,
+                    "captured_white": state.captured_white,
+                    "game_over": game_loop.game_over,
+                }
+            )
 
         # keep connection alive
         while True:
@@ -289,7 +298,7 @@ async def broadcast_game_state():
         "last_move": state.last_move,
         "captured_black": state.captured_black,
         "captured_white": state.captured_white,
-        "game_over": game_loop.game_over
+        "game_over": game_loop.game_over,
     }
 
     disconnected = []
@@ -332,7 +341,7 @@ async def broadcast_performance_update():
         "trajectory_count": trajectory_count,
         "training_steps": training_steps,
         "win_stats": win_stats,
-        "recent_metrics": recent_metrics
+        "recent_metrics": recent_metrics,
     }
 
     disconnected = []
@@ -358,7 +367,7 @@ async def game_loop_task():
         try:
             # check if we need to load a new model
             current_version = redis_client.get_current_model_version()
-            if current_version > getattr(game_loop, 'loaded_version', 0):
+            if current_version > getattr(game_loop, "loaded_version", 0):
                 game_loop.load_latest_model()
                 game_loop.loaded_version = current_version
 

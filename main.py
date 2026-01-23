@@ -30,7 +30,9 @@ def play_game(game, state, model):
     with torch.no_grad():
         policy, value = model(torch.from_numpy(state_tensor).unsqueeze(0))
 
-    print(f"Value: {value.item():.4f} (win prob for {'White' if state.current_player == 2 else 'Black'})")
+    print(
+        f"Value: {value.item():.4f} (win prob for {'White' if state.current_player == 2 else 'Black'})"
+    )
 
     move = select_move_from_policy(policy, game, state)
     if move:
@@ -42,13 +44,16 @@ def play_game(game, state, model):
 
     return state
 
+
 def main():
     # initialize game
     game = GoGame(board_size=9)
     state = game.reset()
 
     print(f"Game initialized with board size: {game.board_size}")
-    print(f"Initial state - Current player: {'Black' if state.current_player == 1 else 'White'}")
+    print(
+        f"Initial state - Current player: {'Black' if state.current_player == 1 else 'White'}"
+    )
 
     # initialize model
     model = GoModel(board_size=9)

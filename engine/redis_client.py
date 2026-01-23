@@ -11,29 +11,31 @@ logger = logging.getLogger(__name__)
 
 class GoRedisClient:
     def __init__(self, host: str = None, port: int = None, db: int = 0):
-        host = host or os.getenv('REDIS_HOST', 'redis') # default to 'redis' for Docker setup
-        port = port or int(os.getenv('REDIS_PORT', 6379))
+        host = host or os.getenv(
+            "REDIS_HOST", "redis"
+        )  # default to 'redis' for Docker setup
+        port = port or int(os.getenv("REDIS_PORT", 6379))
         self.client = redis.Redis(host=host, port=port, db=db, decode_responses=False)
-        self.client.ping() # will raise an error if connection fails
+        self.client.ping()  # will raise an error if connection fails
 
     # model management stuff
     def get_current_model_version(self) -> int:
-        version = self.client.get('current_model_version')
+        version = self.client.get("current_model_version")
         return int(version) if version else 0
 
     def set_current_model_version(self, version: int):
-        self.client.set('current_model_version', version)
+        self.client.set("current_model_version", version)
 
     def save_model(self, version: int, model_data: bytes):
-        self.client.set(f'model:{version}', model_data)
+        self.client.set(f"model:{version}", model_data)
 
     def load_model(self, version: int):
-        return self.client.get(f'model:{version}')
+        return self.client.get(f"model:{version}")
 
     # game state management stuff
     def save_public_game_state(self, state: GoGameState):
         # this is the public, singular game state
-        board_key = 'public:board_state'
+        board_key = "public:board_state"
         self.client.set(board_key, pickle.dumps(state.board))
 
         # save metadata
@@ -46,7 +48,7 @@ class GoRedisClient:
         metadata = {
             "captured_black": state.captured_black,
             "captured_white": state.captured_white,
-            "ko_point": state.ko_point
+            "ko_point": state.ko_point,
         }
         self.client.set("public:metadata", pickle.dumps(metadata))
 
@@ -76,7 +78,7 @@ class GoRedisClient:
             consecutive_passes=0,  # not tracked for public display
             last_was_pass=False,  # not tracked for public display
             board_history=[],  # not tracked for public display
-            board_hashes={hash(board.tobytes())}
+            board_hashes={hash(board.tobytes())},
         )
 
     # training stuff
@@ -84,7 +86,8 @@ class GoRedisClient:
         trajectory_data = pickle.dumps(trajectory)
         result = self.client.lpush("trajectories", trajectory_data)
         logger.info(
-            f"Added trajectory to Redis, result: {result}, total trajectories: {self.client.llen('trajectories')}")
+            f"Added trajectory to Redis, result: {result}, total trajectories: {self.client.llen('trajectories')}"
+        )
 
     def add_trajectories_batch(self, trajectories: List[Dict[str, Any]]):
         """Add multiple training trajectories in a single Redis pipeline operation."""
@@ -101,7 +104,9 @@ class GoRedisClient:
             try:
                 # validate trajectory structure
                 if not isinstance(traj, dict) or "states" not in traj:
-                    logger.warning(f"Skipping invalid trajectory at index {i}: missing required fields")
+                    logger.warning(
+                        f"Skipping invalid trajectory at index {i}: missing required fields"
+                    )
                     continue
 
                 trajectory_data = pickle.dumps(traj)
@@ -125,7 +130,8 @@ class GoRedisClient:
         total_trajectories = self.client.llen("trajectories")
 
         logger.info(
-            f"Added {total_added}/{len(trajectory_data_list)} trajectories to Redis in batch operation, total trajectories: {total_trajectories}")
+            f"Added {total_added}/{len(trajectory_data_list)} trajectories to Redis in batch operation, total trajectories: {total_trajectories}"
+        )
 
         # log any failures
         failed_count = len(trajectory_data_list) - total_added
@@ -138,13 +144,17 @@ class GoRedisClient:
         trajectory_data_list = self.client.lrange("trajectories", 0, count - 1)
         trajectories = [pickle.loads(data) for data in trajectory_data_list]
 
-        logger.info(f"Retrieved {len(trajectories)} trajectories from Redis (requested {count})")
+        logger.info(
+            f"Retrieved {len(trajectories)} trajectories from Redis (requested {count})"
+        )
 
         # remove retrieved trajectories
         if trajectories:
             self.client.ltrim("trajectories", count, -1)
             remaining = self.client.llen("trajectories")
-            logger.info(f"Removed {len(trajectories)} trajectories, {remaining} remaining")
+            logger.info(
+                f"Removed {len(trajectories)} trajectories, {remaining} remaining"
+            )
         else:
             logger.info("No trajectories available to retrieve")
 
@@ -198,7 +208,7 @@ class GoRedisClient:
             "public:move_count",
             "public:current_player",
             "public:last_move",
-            "public:metadata"
+            "public:metadata",
         ]
         self.client.delete(*keys)
 
@@ -208,16 +218,16 @@ class GoRedisClient:
 
         # clear all Go-related keys
         patterns = [
-            "model:*",           # All saved models
+            "model:*",  # All saved models
             "current_model_version",
-            "trajectories",      # Training trajectories
-            "training:*",        # Training metadata
-            "public:*",          # Public game state
-            "public:wins:*",     # Win statistics
-            "rq:queue:*",        # RQ job queues
-            "rq:job:*",          # RQ job data
-            "rq:worker:*",       # RQ worker data
-            "rq:failed:*",       # RQ failed jobs
+            "trajectories",  # Training trajectories
+            "training:*",  # Training metadata
+            "public:*",  # Public game state
+            "public:wins:*",  # Win statistics
+            "rq:queue:*",  # RQ job queues
+            "rq:job:*",  # RQ job data
+            "rq:worker:*",  # RQ worker data
+            "rq:failed:*",  # RQ failed jobs
         ]
 
         # collect all keys to delete
@@ -271,7 +281,9 @@ class GoRedisClient:
         for key, value in backup.items():
             self.client.set(key, value)
 
-    def get_training_metrics_history(self, metric_name: str, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_training_metrics_history(
+        self, metric_name: str, limit: int = 100
+    ) -> List[Dict[str, Any]]:
         """Get historical training metrics for a specific metric."""
         key = f"training_metrics:history:{metric_name}"
         # get most recent entries (highest scores first)
@@ -279,10 +291,12 @@ class GoRedisClient:
 
         history = []
         for value, timestamp in entries:
-            history.append({
-                "timestamp": int(timestamp),
-                "value": float(value),
-                "metric": metric_name
-            })
+            history.append(
+                {
+                    "timestamp": int(timestamp),
+                    "value": float(value),
+                    "metric": metric_name,
+                }
+            )
 
         return history
