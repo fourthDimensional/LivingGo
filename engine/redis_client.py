@@ -270,3 +270,19 @@ class GoRedisClient:
         self.client.flushdb()
         for key, value in backup.items():
             self.client.set(key, value)
+
+    def get_training_metrics_history(self, metric_name: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get historical training metrics for a specific metric."""
+        key = f"training_metrics:history:{metric_name}"
+        # get most recent entries (highest scores first)
+        entries = self.client.zrevrange(key, 0, limit - 1, withscores=True)
+
+        history = []
+        for value, timestamp in entries:
+            history.append({
+                "timestamp": int(timestamp),
+                "value": float(value),
+                "metric": metric_name
+            })
+
+        return history

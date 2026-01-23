@@ -11,3 +11,8 @@ dependencies = [
     "torch>=2.9.1",
     "uvicorn>=0.40.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.14",
+]

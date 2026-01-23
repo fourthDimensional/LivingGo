@@ -306,6 +306,49 @@ async def broadcast_game_state():
             connected_websockets.remove(ws)
 
 
+async def broadcast_performance_update():
+    """Broadcast performance metrics to all connected websockets."""
+    if not connected_websockets:
+        return
+
+    # get current system metrics
+    current_version = redis_client.get_current_model_version()
+    trajectory_count = redis_client.get_trajectory_count()
+    training_steps = redis_client.get_training_steps()
+    win_stats = redis_client.get_win_stats()
+
+    # get recent training metrics
+    recent_metrics = {}
+    metrics = ["policy_loss", "value_loss", "entropy", "total_loss"]
+    for metric in metrics:
+        data = redis_client.get_training_metrics_history(metric, 10)  # last 10 entries
+        if data:
+            recent_metrics[metric] = data[-1]["value"] if data else 0
+
+    performance_message = {
+        "type": "performance_update",
+        "timestamp": int(time.time() * 1000),
+        "current_version": current_version,
+        "trajectory_count": trajectory_count,
+        "training_steps": training_steps,
+        "win_stats": win_stats,
+        "recent_metrics": recent_metrics
+    }
+
+    disconnected = []
+    for websocket in connected_websockets:
+        try:
+            await websocket.send_json(performance_message)
+        except Exception as e:
+            logger.error(f"Failed to send performance update to websocket: {e}")
+            disconnected.append(websocket)
+
+    # remove disconnected websockets
+    for ws in disconnected:
+        if ws in connected_websockets:
+            connected_websockets.remove(ws)
+
+
 async def game_loop_task():
     """Background task for running the game loop."""
     await asyncio.sleep(5)  # Initial delay
@@ -327,7 +370,12 @@ async def game_loop_task():
             game_loop.step_game()
 
             # broadcast state
-            # await broadcast_game_state()
+            await broadcast_game_state()
+
+            performance_counter += 1
+            if performance_counter >= 30:
+                await broadcast_performance_update()
+                performance_counter = 0
 
             # wait 1 second before next move
             await asyncio.sleep(random.randint(10, 2000) / 1000.0)

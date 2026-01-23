@@ -68,14 +68,12 @@ class GoGame:
 
         # check if this move would capture opponent stones and apply in single pass
         opponent_color = 3 - state.current_player
-        would_capture = False
 
         for neighbor in self.get_neighbors(move):
             nx, ny = neighbor
             if temp_board[nx, ny] == opponent_color:
                 group = self.get_group_with_board(temp_board, neighbor)
                 if self.get_liberties_with_board(temp_board, group) == 0:
-                    would_capture = True
                     # apply capture immediately
                     for gx, gy in group:
                         temp_board[gx, gy] = 0
