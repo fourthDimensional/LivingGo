@@ -300,7 +300,7 @@ async def broadcast_game_state():
             logger.error(f"Failed to send game state to websocket: {e}")
             disconnected.append(websocket)
 
-    # tremove disconnected websockets
+    # remove disconnected websockets
     for ws in disconnected:
         if ws in connected_websockets:
             connected_websockets.remove(ws)
