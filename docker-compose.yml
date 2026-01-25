@@ -1,3 +1,5 @@
+# Enable BuildKit for better layer caching
+# Run with: DOCKER_BUILDKIT=1 docker compose up
 
 services:
   redis:
@@ -50,10 +52,14 @@ services:
     build:
       context: frontend
       dockerfile: Dockerfile
+      target: development
     ports:
-      - "85:85"
+      - "85:3000"
     depends_on:
       - api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:85" ]
